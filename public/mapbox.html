@@ -1,15 +1,202 @@
-<html>
-    <head>
-        <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
-        <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
-    
-    </head>
-    <div id='map' style='width: 400px; height: 300px;'></div>
-    <script>
-        mapboxgl.accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <!-- <link rel="icon" href="%PUBLIC_URL%/favicon.ico" /> -->
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <!-- <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" /> -->
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <!-- <link rel="manifest" href="%PUBLIC_URL%/manifest.json" /> -->
+    <title>Leaflet debug page</title>
+
+    <link rel="stylesheet" type="text/css" href="http://unpkg.com/view-design/dist/styles/iview.css">
+    <script type="text/javascript" src="http://vuejs.org/js/vue.min.js"></script>
+    <script type="text/javascript" src="http://unpkg.com/view-design/dist/iview.min.js"></script>
+
+    <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
+    <script type="text/javascript" src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
+
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>React App</title>
+    <style>
+        .btn-control {
+            font: bold 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            background-color: #3386c0;
+            color: #fff;
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            z-index: 1;
+            border: none;
+            width: 200px;
+            margin-left: -100px;
+            display: block;
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 3px;
+        }
+        
+        .btn-control:hover {
+            background-color: #4ea0da;
+        }
+    </style>
+</head>
+
+<body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <!-- <div id="root"></div> -->
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+    <div id="panel">
+        <!-- <Checkbox v-model="single">Car ID</Checkbox>
+        <Checkbox v-model="single">Date</Checkbox>
+        <Checkbox v-model="single">Geo Boundary</Checkbox>
+
+        <template>
+          <Checkbox v-model="single">Checkbox</Checkbox>
+        </template> -->
+
+        <label for="car_id">Car ID: </label>
+        <input id="car_id" name="car" />
+        <button id="search">Search car tracks</button>
+    </div>
+
+    <div id="map"></div>
+    <script type="text/javascript">
+        $("#map").width($(window).width());
+        $("#map").height($(window).height());
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlZXR5dGlnZXIiLCJhIjoiY2todWJmNWlkMDZ5ajJybnRtZm1xNjMzOSJ9.cjdds6yed8AIPQXpzkbZpw';
+        // var map = new mapboxgl.Map({
+        //     container: 'map',
+        //     style: 'mapbox://styles/mapbox/streets-v11'
+        // });
+
         var map = new mapboxgl.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/streets-v11'
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v10',
+            center: [-92.43390000000001, 34.65998],
+            zoom: 12
+        });
+
+        $("#search").on("click", function() {
+            const car_id = $("#car_id").val();
+            $.ajax({
+                url: "http://localhost:8080/probe/searchByCarId",
+                data: {
+                    carId: car_id
+                },
+                type: "GET",
+                dataType: "json",
+                success: function(data) {
+                    if (data.length == 0) {
+                        alert("can not find any car history tracks.");
+                        return;
+                    }
+
+                    var geojson = {
+                        'type': 'FeatureCollection',
+                        'features': []
+                    };
+
+                    data.forEach(function(e) {
+                        var feature = {
+                            'type': 'Feature',
+                            'geometry': {
+                                'type': 'LineString',
+                                'properties': {},
+                                'coordinates': []
+                            }
+                        };
+
+                        feature.geometry.coordinates = e.coordinates;
+                        geojson.features.push(feature);
+
+                    });
+
+
+                    map.on('load', function() {
+                        geojson = {
+                            'type': 'FeatureCollection',
+                            'features': [{
+                                'type': 'Feature',
+                                'geometry': {
+                                    'type': 'LineString',
+                                    'properties': {},
+                                    'coordinates': [
+                                        [-77.0366048812866, 38.89873175227713],
+                                        [-77.03364372253417, 38.89876515143842],
+                                        [-77.03364372253417, 38.89549195896866],
+                                        [-77.02982425689697, 38.89549195896866],
+                                        [-77.02400922775269, 38.89387200688839],
+                                        [-77.01519012451172, 38.891416957534204],
+                                        [-77.01521158218382, 38.892068305429156],
+                                        [-77.00813055038452, 38.892051604275686],
+                                        [-77.00832366943358, 38.89143365883688],
+                                        [-77.00818419456482, 38.89082405874451],
+                                        [-77.00815200805664, 38.88989712255097]
+                                    ]
+                                }
+                            }]
+                        };
+                        map.addSource('LineString', {
+                            'type': 'geojson',
+                            'data': geojson
+                        });
+                        map.addLayer({
+                            'id': 'LineString',
+                            'type': 'line',
+                            'source': 'LineString',
+                            'layout': {
+                                'line-join': 'round',
+                                'line-cap': 'round'
+                            },
+                            'paint': {
+                                'line-color': 'red',
+                                'line-width': 20
+                            }
+                        });
+                    });
+
+                    var coordinates = geojson.features[0].geometry.coordinates;
+
+                    var bounds = coordinates.reduce(function(bounds, coord) {
+                        return bounds.extend(coord);
+                    }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
+
+                    map.fitBounds(bounds, {
+                        padding: 20
+                    });
+
+
+                }
+            }).fail(function(result, result1, result2) {
+                alert(result);
+                alert(result1);
+                alert(result2);
+            });
+
         });
     </script>
+</body>
+
 </html>

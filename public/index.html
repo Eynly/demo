@@ -12,6 +12,10 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Leaflet debug page</title>
 
+    <link rel="stylesheet" type="text/css" href="http://unpkg.com/view-design/dist/styles/iview.css">
+    <script type="text/javascript" src="http://vuejs.org/js/vue.min.js"></script>
+    <script type="text/javascript" src="http://unpkg.com/view-design/dist/iview.min.js"></script>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.3/dist/leaflet.css"
           integrity="sha512-07I2e+7D8p6he1SIM+1twR5TIrhUQn9+I6yjqD53JQjFiMf8EtC93ty0/5vJTZGF8aAocvHYNEDJajGdNx1IsQ=="
           crossorigin=""/>
@@ -50,9 +54,17 @@
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
     <div id="panel">
-      <label for="car_id">car id: </label>
+        <!-- <Checkbox v-model="single">Car ID</Checkbox>
+        <Checkbox v-model="single">Date</Checkbox>
+        <Checkbox v-model="single">Geo Boundary</Checkbox>
+
+        <template>
+          <Checkbox v-model="single">Checkbox</Checkbox>
+        </template> -->
+      
+      <label for="car_id">Car ID: </label>
       <input id="car_id" name="car"/>
-      <button id="search">search car tracks</button>
+      <button id="search">Search car tracks</button>
   </div>
   
   <div id="map"></div>
