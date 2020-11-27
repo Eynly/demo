@@ -1,0 +1,28 @@
+<html>
+
+<head>
+</head>
+
+<body>
+    <div>
+        <canvas id="canvas" style="border: 0px; background-repeat:no-repeat;"></canvas>
+    </div>
+    <script>
+        var rawImage = new Image();
+        rawImage.src = "https://www.history.com/.image/ar_16:9%2Cc_fill%2Ccs_srgb%2Cfl_progressive%2Cg_faces:center%2Cq_auto:good%2Cw_768/MTU3ODc5MDg2NzAwNTA0Mzkz/thanksgiving-hero.jpg";
+        if (rawImage.complete) {
+            var canvas = document.getElementById("canvas");
+            canvas.width = rawImage.width;
+            canvas.height = rawImage.height;
+
+            var ctx = canvas.getContext("2d");
+            ctx.drawImage(rawImage, 0, 0, rawImage.width, rawImage.height);
+
+            // draw 空心矩形 颜色: 黑
+            ctx.fillStyle = "black";
+            ctx.strokeRect(0, 0, 150, 150);
+        }
+    </script>
+</body>
+
+</html>
