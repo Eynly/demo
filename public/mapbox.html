@@ -19,6 +19,7 @@
     <script src='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v1.12.0/mapbox-gl.css' rel='stylesheet' />
     <script type="text/javascript" src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+    <script type="text/javascript" src="NA_country.js"></script>
     <!--
       Notice the use of %PUBLIC_URL% in the tags above.
       It will be replaced with the URL of the `public` folder during the build.
@@ -50,6 +51,11 @@
         .btn-control:hover {
             background-color: #4ea0da;
         }
+        
+        .popup {
+            width: 400px;
+            height: 190px;
+        }
     </style>
 </head>
 
@@ -67,14 +73,6 @@
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
     <div id="panel">
-        <!-- <Checkbox v-model="single">Car ID</Checkbox>
-        <Checkbox v-model="single">Date</Checkbox>
-        <Checkbox v-model="single">Geo Boundary</Checkbox>
-
-        <template>
-          <Checkbox v-model="single">Checkbox</Checkbox>
-        </template> -->
-
         <label for="car_id">Car ID: </label>
         <input id="car_id" name="car" />
         <button id="search">Search car tracks</button>
@@ -86,20 +84,312 @@
         $("#map").height($(window).height());
 
         mapboxgl.accessToken = 'pk.eyJ1Ijoic3dlZXR5dGlnZXIiLCJhIjoiY2todWJmNWlkMDZ5ajJybnRtZm1xNjMzOSJ9.cjdds6yed8AIPQXpzkbZpw';
-        // var map = new mapboxgl.Map({
-        //     container: 'map',
-        //     style: 'mapbox://styles/mapbox/streets-v11'
-        // });
-
+        var zoomThreshold = 6;
         var map = new mapboxgl.Map({
             container: 'map',
-            style: 'mapbox://styles/mapbox/light-v10',
-            center: [-92.43390000000001, 34.65998],
-            zoom: 12
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: [-98.673614, 38.458229],
+            zoom: 3.5
+        });
+
+        // Create a popup, but don't add it to the map yet.
+        var popup = new mapboxgl.Popup({
+            closeButton: false,
+            closeOnMove: true,
+        });
+
+        map.on('load', function() {
+            $.ajax({
+                url: "http://localhost:8080/probe/stateHeatMap",
+                type: "GET",
+                dataType: "json",
+                success: function(data) {
+                    // Add a geojson point source.
+                    // Heatmap layers also work with a vector tile source.
+                    var id = 0;
+                    $(data.features).each(function(index, e) {
+                        e.id = ++id;
+                    });
+                    map.addSource('states', {
+                        'type': 'geojson',
+                        'data': data
+                    });
+
+                    map.addLayer({
+                        'id': 'state-fills',
+                        'type': 'fill',
+                        'source': 'states',
+                        'maxzoom': zoomThreshold,
+                        'layout': {},
+                        paint: {
+                            "fill-color": {
+                                property: "track_num",
+                                stops: [
+                                    [0, "#ffd0a6"],
+                                    [10, "#ffd0a6"],
+                                    [100, "#ffaa7f"],
+                                    [500, "#ff704e"],
+                                    [1000, "#f04040"],
+                                    [10000, "#b50a09"]
+                                ]
+                            },
+                            'fill-opacity': [
+                                'case', ['boolean', ['feature-state', 'hover'], false],
+                                1,
+                                0.5
+                            ]
+                        }
+                    });
+
+                }
+            });
+
+            $.ajax({
+                url: "http://localhost:8080/probe/countyHeatMap",
+                type: "GET",
+                dataType: "json",
+                success: function(data) {
+                    // Add a geojson point source.
+                    // Heatmap layers also work with a vector tile source.
+                    var id = 0;
+                    $(data.features).each(function(index, e) {
+                        e.id = ++id;
+                    });
+                    map.addSource('counties', {
+                        'type': 'geojson',
+                        'data': data
+                    });
+
+                    map.addLayer({
+                        'id': 'county-fills',
+                        'type': 'fill',
+                        'source': 'counties',
+                        'minzoom': zoomThreshold,
+                        'maxzoom': 9,
+                        'layout': {},
+                        paint: {
+                            "fill-color": {
+                                property: "track_num",
+                                stops: [
+                                    [0, "#ffd0a6"],
+                                    [10, "#ffd0a6"],
+                                    [100, "#ffaa7f"],
+                                    [500, "#ff704e"],
+                                    [1000, "#f04040"],
+                                    [10000, "#b50a09"]
+                                ]
+                            },
+                            'fill-opacity': [
+                                'case', ['boolean', ['feature-state', 'hover'], false],
+                                1,
+                                0.5
+                            ]
+                        }
+                    });
+
+                    map.addLayer({
+                        'id': 'county-borders',
+                        'type': 'line',
+                        'minzoom': zoomThreshold,
+                        'maxzoom': 9,
+                        'source': 'counties',
+                        'layout': {},
+                        'paint': {
+                            'line-color': 'rgba(43, 43, 43, .5)',
+                            'line-width': .25
+                        }
+                    });
+                }
+            });
+        });
+
+        map.on('zoomend', function() {
+            if (map.getZoom() >= 9) {
+                var bounds = map.getBounds();
+                $.ajax({
+                    url: "http://localhost:8080/probe/searchByBx",
+                    data: JSON.stringify(bounds),
+                    type: "POST",
+                    dataType: "json",
+                    contentType: "application/json",
+                    success: function(data) {
+                        if (data.length == 0) {
+                            console.log("can not find any track.");
+                            return;
+                        }
+                        addTrackLayer(data);
+                    }
+                });
+            }
+        });
+
+        var selectedLineId = null;
+        map.on('mousemove', 'tracks', function(e) {
+            map.getCanvas().style.cursor = 'pointer';
+            if (e.features.length > 0) {
+                if (selectedLineId) {
+                    map.removeFeatureState({
+                        source: 'tracks',
+                        id: selectedLineId
+                    });
+                }
+
+                selectedLineId = e.features[0].id;
+                map.setFeatureState({
+                    source: 'tracks',
+                    id: selectedLineId
+                }, {
+                    hover: true
+                });
+            }
+
+            var bbox = [
+                [e.point.x - 5, e.point.y - 5],
+                [e.point.x + 5, e.point.y + 5]
+            ];
+            var features = map.queryRenderedFeatures(bbox, {
+                layers: ['tracks']
+            });
+            if (features && features.length > 0) {
+                console.log(features);
+                popup.setLngLat(e.lngLat)
+                    .setHTML(
+                        "<div>" +
+                        "<div><span><strong>Car ID: </strong></span><span>" + features[0].properties.carId + "</span></div>" +
+                        "<div><span><strong>Distance: </strong></span><span>" + features[0].properties.distance + "</span></div>" +
+                        "<div><span><strong>Start time: </strong></span><span>" + features[0].properties.beginTime + "</span></div>" +
+                        "<div><span><strong>End time: </strong></span><span>" + features[0].properties.endTime + "</span></div>" +
+                        "<div><span><strong>Average speed: </strong></span><span>" + features[0].properties.avgSpeed + "</span></div>" +
+                        "<div><span><strong>Coordinate: </strong></span><span>(" + e.lngLat.lng + "," + e.lngLat.lat + ")</span></div>" +
+                        "</div>"
+                    )
+                    .setMaxWidth("340px")
+                    .addTo(map);
+            }
+        });
+
+        map.on('mousemove', 'state-fills', function(e) {
+            map.getCanvas().style.cursor = 'pointer';
+            var hoverLayer1 = map.getStyle().layers.filter(function(layer) {
+                return layer.id === "state-fills"
+            })[0];
+            hoverLayer1.paint['fill-opacity'] = 1;
+            if (e.features.length > 0) {
+                if (selectedLineId) {
+                    map.setFeatureState({
+                        source: 'states',
+                        id: selectedLineId
+                    }, {
+                        hover: false
+                    });
+                }
+                selectedLineId = e.features[0].id;
+                map.setFeatureState({
+                    source: 'states',
+                    id: selectedLineId
+                }, {
+                    hover: true,
+                });
+            }
+
+            var bbox = [
+                [e.point.x - 5, e.point.y - 5],
+                [e.point.x + 5, e.point.y + 5]
+            ];
+            var features = map.queryRenderedFeatures(bbox, {
+                layers: ['state-fills']
+            });
+            if (features && features.length > 0) {
+                console.log(features);
+                if (!features[0].properties.track_num) {
+                    return;
+                }
+                popup.setLngLat(e.lngLat)
+                    .setText(features[0].properties.track_num)
+                    .addTo(map);
+            }
+        });
+
+        map.on('mousemove', 'county-fills', function(e) {
+            map.getCanvas().style.cursor = 'pointer';
+            if (e.features.length > 0) {
+                map.setFeatureState({
+                    source: 'counties',
+                    id: selectedLineId
+                }, {
+                    hover: false
+                });
+                selectedLineId = e.features[0].id;
+                map.setFeatureState({
+                    source: 'counties',
+                    id: selectedLineId
+                }, {
+                    hover: true
+                });
+            }
+
+            var bbox = [
+                [e.point.x - 5, e.point.y - 5],
+                [e.point.x + 5, e.point.y + 5]
+            ];
+            var features = map.queryRenderedFeatures(bbox, {
+                layers: ['county-fills']
+            });
+            if (features && features.length > 0) {
+                console.log(features);
+                if (!features[0].properties.track_num) {
+                    return;
+                }
+                popup.setLngLat(e.lngLat)
+                    .setText(features[0].properties.track_num)
+                    .addTo(map);
+            }
+        });
+
+        map.on('mouseleave', 'state-fills', function() {
+            map.getCanvas().style.cursor = '';
+            popup.remove();
+            if (selectedLineId) {
+                map.setFeatureState({
+                    source: 'states',
+                    id: selectedLineId
+                }, {
+                    hover: false
+                });
+            }
+            selectedLineId = null;
+        });
+
+        map.on('mouseleave', 'county-fills', function() {
+            map.getCanvas().style.cursor = '';
+            popup.remove();
+            if (selectedLineId) {
+                map.setFeatureState({
+                    source: 'counties',
+                    id: selectedLineId
+                }, {
+                    hover: false
+                });
+            }
+            selectedLineId = null;
+        });
+
+        map.on('mouseleave', 'tracks', function() {
+            map.getCanvas().style.cursor = '';
+            popup.remove();
+            if (selectedLineId) {
+                map.setFeatureState({
+                    source: 'tracks',
+                    id: selectedLineId
+                }, {
+                    hover: false
+                });
+            }
+            selectedLineId = null;
         });
 
         $("#search").on("click", function() {
-            const car_id = $("#car_id").val();
+            var car_id = $("#car_id").val();
             $.ajax({
                 url: "http://localhost:8080/probe/searchByCarId",
                 data: {
@@ -109,96 +399,19 @@
                 dataType: "json",
                 success: function(data) {
                     if (data.length == 0) {
-                        alert("can not find any car history tracks.");
+                        console.log("can not find any track.");
                         return;
                     }
+                    removeLayerByName('tracks');
+                    var geojson = addTrackLayer(data);
 
-                    var geojson = {
-                        'type': 'FeatureCollection',
-                        'features': []
-                    };
-
-                    data.forEach(function(e) {
-                        var feature = {
-                            'type': 'Feature',
-                            'geometry': {
-                                'type': 'LineString',
-                                'properties': {},
-                                'coordinates': []
-                            }
-                        };
-
-                        feature.geometry.coordinates = e.coordinates;
-                        geojson.features.push(feature);
-
-                    });
-
-                    map.addSource('tracks', {
-                        'type': 'geojson',
-                        'data': geojson
-                    });
-                    map.addLayer({
-                        'id': 'clusters',
-                        'type': 'circle',
-                        'source': 'tracks',
-                        // 'layout': {
-                        //     'line-join': 'round',
-                        //     'line-cap': 'round'
-                        // },
-                        'paint': {
-                            'circle-color': [
-                                'step', ['get', 'point_count'],
-                                '#51bbd6',
-                                100,
-                                '#f1f075',
-                                750,
-                                '#f28cb1'
-                            ],
-                            'circle-radius': [
-                                'step', ['get', 'point_count'],
-                                20,
-                                100,
-                                30,
-                                750,
-                                40
-                            ]
-
-                        }
-                    });
-
-                    map.addLayer({
-                        id: 'cluster-count',
-                        type: 'symbol',
-                        source: 'tracks',
-
-                        // layout: {
-                        //     'text-field': '{point_count_abbreviated}',
-                        //     'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Bold'],
-                        //     'text-size': 12
-                        // }
-                    });
-
-                    // inspect a cluster on click
-                    map.on('click', 'clusters', function(e) {
-                        var features = map.queryRenderedFeatures(e.point, {
-                            layers: ['clusters']
-                        });
-                        var clusterId = features[0].properties.cluster_id;
-                        map.getSource('tracks').getClusterExpansionZoom(
-                            clusterId,
-                            function(err, zoom) {
-                                if (err) return;
-                                map.easeTo({
-                                    center: features[0].geometry.coordinates,
-                                    zoom: zoom
-                                });
-                            }
-                        );
-                    });
-
-
+                    // Geographic coordinates of the LineString
                     var coordinates = geojson.features[0].geometry.coordinates;
-
+                    // Pass the first coordinates in the LineString to `lngLatBounds` &
+                    // wrap each coordinate pair in `extend` to include them in the bounds
+                    // result. A variation of this technique could be applied to zooming
+                    // to the bounds of multiple Points or Polygon geomteries - it just
+                    // requires wrapping all the coordinates with the extend method.
                     var bounds = coordinates.reduce(function(bounds, coord) {
                         return bounds.extend(coord);
                     }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
@@ -206,8 +419,6 @@
                     map.fitBounds(bounds, {
                         padding: 20
                     });
-
-
                 }
             }).fail(function(result, result1, result2) {
                 alert(result);
@@ -216,6 +427,96 @@
             });
 
         });
+
+        function removeLayerByName(name) {
+            if (map.getLayer(name)) {
+                map.removeLayer(name);
+                map.removeSource(name);
+            }
+        }
+
+        function addTrackLayer(data) {
+            if (map.getLayer("tracks")) {
+                return;
+            }
+            var geojson = {
+                'type': 'FeatureCollection',
+                'features': []
+            };
+
+            var lineId = 0;
+            data.forEach(function(e) {
+                lineId += 1;
+                var feature = {
+                    'id': lineId,
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'LineString',
+                        'properties': {},
+                        'coordinates': []
+                    },
+                    'properties': {
+                        'carId': e.carId,
+                        'distance': e.distance,
+                        'beginTime': e.beginTime,
+                        'endTime': e.endTime,
+                        'avgSpeed': e.avgSpeed
+                    }
+                };
+
+                feature.geometry.coordinates = e.coordinates;
+                geojson.features.push(feature);
+
+            });
+
+            map.addSource('tracks', {
+                'type': 'geojson',
+                'data': geojson
+            });
+
+            map.addLayer({
+                'id': 'tracks',
+                'type': 'line',
+                'source': 'tracks',
+                'minzoom': 9,
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': [
+                        'case', ['boolean', ['feature-state', 'hover'], false],
+                        [
+                            'interpolate', ['linear'],
+                            ['get', 'distance'],
+                            100,
+                            '#BF93E4',
+                            200,
+                            '#fee8c8',
+                            300,
+                            '#fdd49e',
+                            400,
+                            '#fdbb84',
+                            500,
+                            '#fc8d59',
+                            600,
+                            '#ef6548',
+                            700,
+                            '#d7301f',
+                            800,
+                            '#b30000',
+                            900,
+                            '#7f0000',
+                            1000,
+                            '#BF93E4'
+                        ],
+                        '#3388ff'
+                    ],
+                    'line-width': 8
+                }
+            });
+            return geojson;
+        }
     </script>
 </body>
 
